@@ -1,0 +1,19 @@
+build/tmp/
+build/cache/
+build/sstate-cache/
+build/bitbake-cookerdaemon.log
+downloads/
+sstate-cache/
+layers/poky/
+layers/meta-openembedded/
+layers/meta-st-stm32mp/
+
+# kernel module build output (from building in-tree for a quick host test)
+*.ko
+*.o
+*.mod
+*.mod.c
+*.cmd
+modules.order
+Module.symvers
+.tmp_versions/
