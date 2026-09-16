@@ -27,6 +27,20 @@ Two application collections: Game Pad (report ID 5) and Consumer (report ID 2).
     0     8      report ID = 0x05
     1-2   15     buttons 1..15              0/1 each, LSB = button 1
           1      padding (constant)
+
+          Buttons 3 and 6 are declared but never fire. The other 13, checked
+          against evtest on 2026-09-16:
+
+              1  A        7  LB      11  Back
+              2  B        8  RB      12  Start
+              4  X        9  LT      13  Guide
+              5  Y       10  RT      14  L3
+                                     15  R3
+
+          Report by position, not label: this is an Xbox layout, so X is
+          BTN_WEST and Y is BTN_NORTH. input-event-codes.h aliases BTN_X to
+          BTN_NORTH and BTN_Y to BTN_WEST, which is a SNES-era leftover and
+          the opposite of what this pad needs.
     3     4      hat switch                 0..7 clockwise from north,
                                             8 = centred (null state)
           4      padding (constant)
@@ -38,7 +52,9 @@ Two application collections: Game Pad (report ID 5) and Consumer (report ID 2).
     9     8      Accelerator (R2 trigger)   0..255
 
 Axes are 8-bit unsigned with no sign bit, so centre is 128 and you subtract
-that yourself if you want a signed range. The hat encodes its neutral position
+that yourself if you want a signed range. All four sticks and both triggers
+were seen covering the full 0..255 under evtest, and the hat resolved to
+-1/0/+1 on both axes. The hat encodes its neutral position
 as 8 rather than as a separate bit, which is what "Null State" in the
 descriptor means -- decode it before mapping to ABS_HAT0X/ABS_HAT0Y.
 

@@ -26,14 +26,31 @@ struct gamesir {
 };
 
 /*
- * Buttons 1..15 in descriptor order, mapped the way hid-input maps a generic
- * pad. The pad ships no usage labels, so this ordering is a guess until it is
- * checked against evtest.
+ * Buttons 1..15 as the descriptor numbers them. Mapped by physical position,
+ * which is what Documentation/input/gamepad.rst asks for: this is an Xbox
+ * layout, so X sits west and Y sits north. The BTN_X/BTN_Y aliases in
+ * input-event-codes.h claim the opposite -- they are a SNES-era leftover and
+ * are wrong for this pad.
+ *
+ * Buttons 3 and 6 are declared but never fire; 0 means "skip".
+ * Checked against evtest, 2026-09-16.
  */
 static const unsigned int gamesir_btn[] = {
-	BTN_SOUTH, BTN_EAST, BTN_C, BTN_NORTH, BTN_WEST,
-	BTN_Z, BTN_TL, BTN_TR, BTN_TL2, BTN_TR2,
-	BTN_SELECT, BTN_START, BTN_MODE, BTN_THUMBL, BTN_THUMBR,
+	BTN_SOUTH,	/* 1  A */
+	BTN_EAST,	/* 2  B */
+	0,		/* 3  unused */
+	BTN_WEST,	/* 4  X */
+	BTN_NORTH,	/* 5  Y */
+	0,		/* 6  unused */
+	BTN_TL,		/* 7  LB */
+	BTN_TR,		/* 8  RB */
+	BTN_TL2,	/* 9  LT */
+	BTN_TR2,	/* 10 RT */
+	BTN_SELECT,	/* 11 Back */
+	BTN_START,	/* 12 Start */
+	BTN_MODE,	/* 13 Guide */
+	BTN_THUMBL,	/* 14 L3 */
+	BTN_THUMBR,	/* 15 R3 */
 };
 
 /* Hat runs 0..7 clockwise from north; 8 means centred. */
@@ -78,7 +95,8 @@ static int gamesir_input_setup(struct gamesir *gs)
 	input_set_drvdata(input, gs);
 
 	for (i = 0; i < ARRAY_SIZE(gamesir_btn); i++)
-		input_set_capability(input, EV_KEY, gamesir_btn[i]);
+		if (gamesir_btn[i])
+			input_set_capability(input, EV_KEY, gamesir_btn[i]);
 
 	/*
 	 * The descriptor calls the right stick Z/Rz and the triggers
@@ -116,7 +134,9 @@ static int gamesir_raw_event(struct hid_device *hdev, struct hid_report *report,
 
 	buttons = get_unaligned_le16(&data[1]);
 	for (i = 0; i < ARRAY_SIZE(gamesir_btn); i++)
-		input_report_key(gs->input, gamesir_btn[i], buttons & BIT(i));
+		if (gamesir_btn[i])
+			input_report_key(gs->input, gamesir_btn[i],
+					 buttons & BIT(i));
 
 	hat = data[3] & 0x0f;
 	if (hat < ARRAY_SIZE(gamesir_hat_x)) {
