@@ -184,7 +184,42 @@ and start the bridge:
     pad-bridge -v &
 
 `-v` prints each command letter as it goes out, which separates a pad problem
-from an rpmsg problem straight away. Details, memory map and how to push a
+from an rpmsg problem straight away.
+
+### Stickman controls
+
+| Pad | Does |
+|---|---|
+| D-pad left/right, or left stick | walk; releasing stops |
+| D-pad up, left stick up, **A**, **Y** | jump |
+| **X**, **LB**, **RB** | throw a fireball |
+| **Start** | pause |
+| **Back**, **B** | new game |
+
+Land on an enemy's head to stomp it, or burn it with a fireball; either scores a
+point. Touching one any other way costs a life, of three, and you blink for a
+second and a half while invulnerable. Enemies arrive faster as the score climbs.
+You can jump up through the two ledges from underneath -- the collision only
+catches you falling onto a top edge.
+
+The pad button names resolve correctly here because `gamesir-k1` reports by
+position rather than by label, so **X** really is the west button and **Y** the
+north one. With `hid-generic`'s default mapping those two are swapped.
+
+The firmware takes single letters, so it can be driven from a shell with no pad
+attached at all:
+
+    printf 'r' > /dev/ttyRPMSG0     # walk right      R stops
+    printf 'l' > /dev/ttyRPMSG0     # walk left       L stops
+    printf 'j' > /dev/ttyRPMSG0     # jump
+    printf 'f' > /dev/ttyRPMSG0     # fireball
+    printf 'p' > /dev/ttyRPMSG0     # pause
+    printf 'n' > /dev/ttyRPMSG0     # new game
+
+`fake-pad` does the same thing in a loop if you want movement without hardware.
+Note that held directions are dropped after a second and a half of silence, so
+the stickman cannot be left walking into a wall if whatever was driving it
+stops. Details, memory map and how to push a
 rebuilt ELF over the serial console are in [docs/m4-workflow.md](docs/m4-workflow.md).
 
 Note the M4 has no console of its own: the serial port belongs to Linux, so the
