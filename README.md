@@ -1,26 +1,42 @@
 # emblinux_drv
 
-A Yocto build for the STM32MP157D-DK1 and an out-of-tree kernel driver for a
-GameSir-K1 USB gamepad.
+A Yocto build for the STM32MP157D-DK1, an out-of-tree HID driver for a
+GameSir-K1 gamepad, and Cortex-M4 firmware that runs a game on an I2C OLED
+while Linux on the A7 steers it with that pad.
 
-The board half is a small BSP layer, `meta-dk1`, sitting on top of ST's
-`meta-st-stm32mp`. The driver half is `gamesir-k1`, an `hid_driver` that
-decodes the pad's HID reports itself and feeds its own input device rather
-than letting `hid-generic` do the mapping.
+Three parts, each useful on its own:
+
+- `meta-dk1`, a small BSP layer on top of ST's `meta-st-stm32mp`, with a machine
+  for this board rather than the DK2 one ST ship.
+- `gamesir-k1`, an `hid_driver` that decodes the pad's reports itself and feeds
+  its own input device instead of letting `hid-generic` map them.
+- `stickman-m4`, bare-metal M4 firmware driving an SSD1306 over I2C5, taking
+  input from Linux over rpmsg, plus the userspace bridge that feeds it.
 
 Tested against Yocto 5.0.20 (scarthgap), kernel 6.6.129, on an
-STM32MP157D-DK1 with a GameSir-K1 (USB `3537:1082`).
+STM32MP157D-DK1 (STM32MP157DAC, board MB1272) with a GameSir-K1 (USB
+`3537:1082`) and a 128x64 SSD1306 at `0x3c`.
+
+**If you want to build the whole thing from nothing, read
+[docs/REPLICATE.md](docs/REPLICATE.md)** -- every step in order, with the traps
+marked where you would hit them.
 
 ## What's here
 
     layers/meta-dk1/
-      conf/machine/stm32mp157d-dk1.conf   the machine
-      wic/sdcard-stm32mp157d-dk1.wks.in   SD card layout
-      recipes-kernel/gamesir-k1/          the driver and its recipe
+      conf/machine/stm32mp157d-dk1.conf     the machine
+      wic/sdcard-stm32mp157d-dk1.wks.in     SD card layout
+      recipes-kernel/gamesir-k1/            HID driver for the pad
+      recipes-extended/stickman-m4/         Cortex-M4 firmware
+      recipes-extended/pad-bridge/          evdev -> rpmsg, userspace
+      recipes-extended/stm32mp1-projects/   narrows ST's Cube example build
       recipes-core/images/dk1-image-dev.bb
-    docs/gamesir-k1-protocol.md           decoded HID protocol
-    build/conf/                           local.conf and bblayers.conf
-    TUTORIAL.md                           notes from working through Yocto
+    docs/REPLICATE.md                       build the whole thing from nothing
+    docs/gamesir-k1-protocol.md             decoded HID protocol
+    docs/oled-i2c5.md                       display wiring and init sequence
+    docs/m4-workflow.md                     building, pushing and loading M4 code
+    build/conf/                             local.conf and bblayers.conf
+    TUTORIAL.md                             notes from working through Yocto
     setup-env.sh
 
 The three upstream layers are not vendored. See below for fetching them.
@@ -134,6 +150,46 @@ by hand:
 
     echo -n '0003:3537:1082.0003' | sudo tee /sys/bus/hid/drivers/hid-generic/unbind
     echo -n '0003:3537:1082.0003' | sudo tee /sys/bus/hid/drivers/gamesir-k1/bind
+
+## The M4 firmware
+
+`stickman-m4` is bare-metal Cortex-M4 code: it scans I2C5, reports an
+i2cdetect-style map into the remoteproc trace buffer, self-tests whichever
+display answered, then runs a game that Linux steers over rpmsg. It handles
+SSD1306/SH1106 OLEDs at `0x3c`/`0x3d` and HD44780-behind-PCF8574 LCDs at
+`0x27`/`0x3f`, and it recovers by rescanning if the display stops acking.
+
+It does not use OpenAMP. The rpmsg layer and vrings are implemented directly,
+which is far less machinery than ST's middleware for the same result.
+
+    bitbake stickman-m4
+
+`GAME ?= "stickman"` in the recipe, with `snake` as the other option. Exactly
+one is compiled in.
+
+Which core owns I2C5 is a boot-menu choice, not a rebuild -- all three device
+trees are in the image:
+
+    1:  OpenSTLinux                    i2c5 off
+    2:  stm32mp157d-dk1-a7-examples    i2c5 -> Linux, /dev/i2c-1
+    3:  stm32mp157d-dk1-m4-examples    i2c5 -> the M4
+
+Boot entry 3, then load it:
+
+    echo i2c_screen_cm4.elf > /sys/class/remoteproc/remoteproc0/firmware
+    echo start > /sys/class/remoteproc/remoteproc0/state
+
+and start the bridge:
+
+    pad-bridge -v &
+
+`-v` prints each command letter as it goes out, which separates a pad problem
+from an rpmsg problem straight away. Details, memory map and how to push a
+rebuilt ELF over the serial console are in [docs/m4-workflow.md](docs/m4-workflow.md).
+
+Note the M4 has no console of its own: the serial port belongs to Linux, so the
+firmware's only output is the trace buffer at
+`/sys/kernel/debug/remoteproc/remoteproc0/trace0`.
 
 ## Note on the images
 
