@@ -17,3 +17,5 @@ layers/meta-st-stm32mp/
 modules.order
 Module.symvers
 .tmp_versions/
+build/bitbake.lock
+build/bitbake-cookerdaemon.log
